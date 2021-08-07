@@ -1,6 +1,5 @@
 import tensorflow as tf
 import numpy as np
-import miditoolkit
 import modules
 import pickle
 import utils
@@ -29,7 +28,7 @@ class Transformer_XL(object):
         # load model
         self.is_training = is_training
         if self.is_training:
-            self.batch_size = 4
+            self.batch_size = 2
         else:
             self.batch_size = 1
         self.checkpoint_path = '{}/model'.format(checkpoint)
@@ -84,6 +83,7 @@ class Transformer_XL(object):
         grads = tf.gradients(self.avg_loss, all_vars)
         grads_and_vars = list(zip(grads, all_vars))
         all_trainable_vars = tf.reduce_sum([tf.reduce_prod(v.shape) for v in tf.compat.v1.trainable_variables()])
+        print ('num parameters:', np.sum([np.prod(v.get_shape().as_list()) for v in all_vars]))
         # optimizer
         decay_lr = tf.compat.v1.train.cosine_decay(
             self.learning_rate,
@@ -97,12 +97,11 @@ class Transformer_XL(object):
         config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
         self.sess = tf.compat.v1.Session(config=config)
-        # self.saver.restore(self.sess, self.checkpoint_path)
-        cek_cekpoint = False
+        cek_cekpoint = True
         if cek_cekpoint:
             self.saver.restore(self.sess, self.checkpoint_path)
-        # else:
-        #     self.sess.run(tf.compat.v1.global_variables_initializer())
+        else:
+            self.sess.run(tf.compat.v1.global_variables_initializer())
 
     ########################################
     # temperature sampling
@@ -152,20 +151,21 @@ class Transformer_XL(object):
             words = []
             for _ in range(self.batch_size):
                 ws = [self.event2word['Bar_None']]
+                # Try => Position_5/32
                 if 'chord' in self.checkpoint_path:
                     tempo_classes = [v for k, v in self.event2word.items() if 'Tempo Class' in k]
                     tempo_values = [v for k, v in self.event2word.items() if 'Tempo Value' in k]
                     chords = [v for k, v in self.event2word.items() if 'Chord' in k]
-                    ws.append(self.event2word['Position_1/32'])
+                    ws.append(self.event2word['Position_1/16'])
                     ws.append(np.random.choice(chords))
-                    ws.append(self.event2word['Position_1/32'])
+                    ws.append(self.event2word['Position_1/16'])
                     ws.append(np.random.choice(tempo_classes))
                     ws.append(np.random.choice(tempo_values))
                 else:
                     tempo_classes = [v for k, v in self.event2word.items() if 'Tempo Class' in k]
                     tempo_values = [v for k, v in self.event2word.items() if 'Tempo Value' in k]
                     
-                    ws.append(self.event2word['Position_1/32'])
+                    ws.append(self.event2word['Position_1/16'])
                     ws.append(np.random.choice(tempo_classes))
                     ws.append(np.random.choice(tempo_values))
                 words.append(ws)
@@ -213,18 +213,11 @@ class Transformer_XL(object):
         # write
         print("Generating music...")
         print(words)
-        if prompt:
-            utils.write_midi(
-                words=words[0][original_length:],
-                word2event=self.word2event,
-                output_path=output_path,
-                prompt_path=prompt)
-        else:
-            utils.write_midi(
-                words=words[0],
-                word2event=self.word2event,
-                output_path=output_path,
-                prompt_path=None)
+        utils.write_midi(
+            words=words[0],
+            word2event=self.word2event,
+            output_path=output_path,
+            prompt_path=None)
 
     ########################################
     # prepare training data
@@ -238,6 +231,7 @@ class Transformer_XL(object):
             all_events.append(events)
         # event to word
         all_words = []
+        print("Preparing data...")
         for events in all_events:
             words = []
             for event in events:
@@ -257,7 +251,6 @@ class Transformer_XL(object):
         # to training data
         self.group_size = 5
         segments = []
-        print("Preparing data...")
         for words in all_words:
             pairs = []
             for i in range(0, len(words)-self.x_len-1, self.x_len):
@@ -283,7 +276,7 @@ class Transformer_XL(object):
         training_data = training_data[index]
         num_batches = len(training_data) // self.batch_size
         st = time.time()
-        for e in range(74):
+        for e in range(200):
             total_loss = []
             for i in range(num_batches):
                 segments = training_data[self.batch_size*i:self.batch_size*(i+1)]

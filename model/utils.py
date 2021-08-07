@@ -5,7 +5,7 @@ import numpy as np
 
 # parameters for input
 DEFAULT_VELOCITY_BINS = np.linspace(0, 128, 32+1, dtype=np.int)
-DEFAULT_FRACTION = 32
+DEFAULT_FRACTION = 16
 DEFAULT_DURATION_BINS = np.arange(60, 3841, 60, dtype=int)
 DEFAULT_TEMPO_INTERVALS = [range(30, 90), range(90, 150), range(150, 210)]
 
@@ -129,22 +129,22 @@ class Event(object):
 def item2event(groups, emotion):
     events = []
     n_downbeat = 0
+    state = 0
     for i in range(len(groups)):
         if 'Note' not in [item.name for item in groups[i][1:-1]]:
             continue
         bar_st, bar_et = groups[i][0], groups[i][-1]
-        if i == 0:
-          events.append(Event(
-              name='Emotion-Start',
-              time=None, 
-              value=emotion,
-              text=emotion))
         n_downbeat += 1
         events.append(Event(
             name='Bar',
             time=None, 
             value=None,
             text='{}'.format(n_downbeat)))
+        events.append(Event(
+            name='Emotion-Start',
+            time=None, 
+            value=emotion,
+            text=emotion))
         for item in groups[i][1:-1]:
             # position
             flags = np.linspace(bar_st, bar_et, DEFAULT_FRACTION, endpoint=False)
@@ -206,7 +206,7 @@ def item2event(groups, emotion):
                     tempo_style = Event('Tempo Class', item.start, 'fast', None)
                     tempo_value = Event('Tempo Value', item.start, 59, None)
                 events.append(tempo_style)
-                events.append(tempo_value)     
+                events.append(tempo_value)    
     events.append(Event( name='Emotion-End', time=None, value=emotion, text=emotion))
     return events
 
